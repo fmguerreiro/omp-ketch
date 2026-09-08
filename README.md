@@ -2,8 +2,7 @@
 
 Native [Oh My Pi (OMP)](https://oh-my-pi.dev) tools for the [`ketch`](https://github.com/1broseidon/ketch)
 CLI: public open-source code search, library docs, bounded site crawl, and
-rank-fused deep web search — exposed as first-class OMP tools the agent can
-call on its own.
+rank-fused deep web search. The agent can call each tool on its own.
 
 It is **not** a fork of the `pi-ketch` package. That package fails to load on
 OMP (its barrel import of `@earendil-works/pi-coding-agent` pulls in
@@ -15,13 +14,13 @@ the search engine underneath is identical.
 ## What it adds
 
 OMP already has strong local search (`grep`, `glob`, LSP) and its own
-`web_search` / `read`. This extension deliberately adds only the surfaces OMP
-lacks, and steers the agent to keep everyday web search and single-page reads
-on OMP's native tools.
+`web_search` / `read`. This extension adds only the surfaces OMP lacks and
+steers the agent to keep everyday web search and single-page reads on OMP's
+native tools.
 
 | Tool | Use it for |
 | --- | --- |
-| `ketch_code` | Real-world usage examples in **public** third-party repos (grep.app, Sourcegraph, GitHub). Not the local checkout — that's `grep`/`read`. |
+| `ketch_code` | Real-world usage examples in **public** third-party repos (grep.app, Sourcegraph, GitHub). For the local checkout, use `grep`/`read`. |
 | `ketch_docs` | Curated library/API documentation via Context7. Needs a Context7 key configured in ketch. |
 | `ketch_deep_search` | Federated web search across every usable ketch backend, fused with Reciprocal Rank Fusion. For contested/multi-part research only; routine search stays on OMP's `web_search`. |
 | `ketch_crawl` | Bounded, same-host breadth-first crawl from a seed URL, clean markdown per page. For a single page use OMP's `read`. |
@@ -40,7 +39,14 @@ on OMP's native tools.
 
 ## Install
 
-Drop the single file into your OMP extensions directory and reload:
+Install the package directly from GitHub:
+
+```sh
+omp install github:fmguerreiro/omp-ketch-tools
+```
+
+Restart OMP to load the new tools. To install the standalone extension file
+instead:
 
 ```sh
 mkdir -p ~/.omp/agent/extensions
@@ -48,10 +54,8 @@ curl -fsSL https://raw.githubusercontent.com/fmguerreiro/omp-ketch-tools/main/ke
   -o ~/.omp/agent/extensions/ketch-tools.ts
 ```
 
-Then run `/reload` in an OMP session, or restart OMP. Extensions in that
-directory are auto-discovered at session start — no config entry required.
-
-`install.sh` does the same, and checks for the `ketch` binary:
+The standalone file is auto-discovered at session start; no config entry is
+required. `install.sh` downloads it and checks for the `ketch` binary:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fmguerreiro/omp-ketch-tools/main/install.sh | sh
@@ -81,17 +85,17 @@ returning a 504) proves the tool loaded and reached the binary.
 ## How the agent decides to call it
 
 The model picks a tool from its name, description, parameter schema, and the
-surrounding conversation, weighed against every other available tool — so
-selection is a probabilistic judgment, not a keyword match. The descriptions in
+surrounding conversation, weighed against every other available tool. Selection
+is a probabilistic judgment, not a keyword match. The descriptions in
 `ketch-tools.ts` are the main routing hint; each one also says what the tool is
 *not* for, to keep local-code and routine-web questions on OMP's native tools.
 To force a specific tool, name it explicitly in your prompt.
 
 ## Configuration
 
-- `KETCH_BIN` — absolute path to the `ketch` binary if it is not on `PATH`.
-- Backends and API keys (Context7, Exa, Firecrawl, Brave, SearXNG, …) are
-  configured in **ketch itself**, e.g. `ketch config set context7_api_key <key>`.
+- `KETCH_BIN`: absolute path to the `ketch` binary if it is not on `PATH`.
+- Backends and API keys (Context7, Exa, Firecrawl, Brave, SearXNG, and others)
+  are configured in **ketch itself**, e.g. `ketch config set context7_api_key <key>`.
   See the [ketch docs](https://github.com/1broseidon/ketch).
 
 The default code backend is grep.app (ketch's own default). To default to
@@ -106,4 +110,4 @@ reload.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
