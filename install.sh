@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-RAW_URL="https://raw.githubusercontent.com/fmguerreiro/omp-ketch-tools/main/ketch-tools.ts"
+RAW_URL="https://raw.githubusercontent.com/fmguerreiro/omp-ketch/main/ketch-tools.ts"
 DEST_DIR="${HOME}/.omp/agent/extensions"
 DEST="${DEST_DIR}/ketch-tools.ts"
 

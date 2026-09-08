@@ -1,12 +1,12 @@
 {
-  "name": "omp-ketch-tools",
+  "name": "omp-ketch",
   "version": "0.1.0",
   "description": "Public code search, library docs, deep web search, and site crawling for OMP.",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fmguerreiro/omp-ketch-tools.git"
+    "url": "git+https://github.com/fmguerreiro/omp-ketch.git"
   },
   "keywords": [
     "omp",

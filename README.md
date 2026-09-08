@@ -1,4 +1,4 @@
-# omp-ketch-tools
+# omp-ketch
 
 Native [Oh My Pi (OMP)](https://oh-my-pi.dev) tools for the [`ketch`](https://github.com/1broseidon/ketch)
 CLI: public open-source code search, library docs, bounded site crawl, and
@@ -42,7 +42,7 @@ native tools.
 Install the package directly from GitHub:
 
 ```sh
-omp install github:fmguerreiro/omp-ketch-tools
+omp install github:fmguerreiro/omp-ketch
 ```
 
 Restart OMP to load the new tools. To install the standalone extension file
@@ -50,7 +50,7 @@ instead:
 
 ```sh
 mkdir -p ~/.omp/agent/extensions
-curl -fsSL https://raw.githubusercontent.com/fmguerreiro/omp-ketch-tools/main/ketch-tools.ts \
+curl -fsSL https://raw.githubusercontent.com/fmguerreiro/omp-ketch/main/ketch-tools.ts \
   -o ~/.omp/agent/extensions/ketch-tools.ts
 ```
 
@@ -58,7 +58,7 @@ The standalone file is auto-discovered at session start; no config entry is
 required. `install.sh` downloads it and checks for the `ketch` binary:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/fmguerreiro/omp-ketch-tools/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/fmguerreiro/omp-ketch/main/install.sh | sh
 ```
 
 ## Verify
