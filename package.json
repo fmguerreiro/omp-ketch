@@ -8,6 +8,9 @@
     "type": "git",
     "url": "git+https://github.com/fmguerreiro/omp-ketch.git"
   },
+  "homepage": "https://github.com/fmguerreiro/omp-ketch#readme",
+  "bugs": "https://github.com/fmguerreiro/omp-ketch/issues",
+  "author": "Filipe Guerreiro",
   "keywords": [
     "omp",
     "oh-my-pi",
