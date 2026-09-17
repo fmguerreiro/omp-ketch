@@ -31,7 +31,7 @@ native tools.
 2. **The `ketch` binary** on your `PATH`:
 
    ```sh
-   brew install 1broseidon/tap/ketch
+   brew install ketch
    ```
 
    Or point the extension at any location with the `KETCH_BIN` environment
@@ -74,13 +74,79 @@ ketch code -b sourcegraph --lang go -l 2 -- "errgroup.WithContext"
 ```sh
 omp -p --no-session --mode json --auto-approve \
   'Call ketch_code with backend sourcegraph, lang go, limit 2, query "errgroup.WithContext". Return only the tool result.' \
+  < /dev/null \
   | jq -c 'select(.type=="tool_execution_end") | {toolName, isError, text: .result.content[0].text}'
 ```
+
+Redirect stdin when you launch `omp -p` from another process. OMP skips the
+read when stdin is a terminal, but an inherited pipe that never closes leaves
+it waiting in `readPipedInput` for an EOF that never comes, and the prompt
+never runs. Startup also takes tens of seconds; OMP names the phase it is
+waiting in every 10 s, so read stderr before assuming it hung.
 
 OMP surfaces extension tools as `xd://<tool>` devices, so the event's
 `toolName` is `write` with `path: "xd://ketch_code"`. **Either** a
 ketch-formatted result **or** a propagated ketch backend error (e.g. grep.app
 returning a 504) proves the tool loaded and reached the binary.
+
+## Measured behaviour
+
+Run 2026-09-17 with ketch v0.16.1 and OMP v18.2.2, model `claude-opus-5`, on an
+install where `ketch doctor` reported 3 of the 10 search backends usable: exa,
+keenable and parallel keyed, brave/firecrawl/tavily/serpbase without keys,
+degoog without a URL, ddg rate-limiting and searxng pointed at its default
+localhost. Your own numbers depend on which keys you have set.
+
+**Every surface reached its backend** (`ketch` alone, no OMP, no model):
+
+| Command | Result |
+| --- | --- |
+| `ketch code -l 2 -- "errgroup.WithContext"` | 2 hits with `file:line` and URL (grep.app) |
+| `ketch code -b sourcegraph --lang go -l 2 -- …` | 2 hits, tens of seconds — Sourcegraph can eat half the tool's 45 s timeout |
+| `ketch crawl "https://bun.sh/docs/cli/test" --depth 1 --json` | seed page as markdown, 2168 words |
+| `ketch search --multi=all -l 3 -- …` | 3 fused results, one from each usable backend |
+| `ketch docs -l 2 -- "tenacity retry"` | fails: `context7: API key not set` |
+
+Omitting `backends` is the safe call: `--multi=all` skips a backend it cannot
+reach, but naming an explicit set fails the whole search if any one member is
+unconfigured. `--multi=parallel,tavily` returns `tavily: API key not set` and
+no results rather than falling back to `parallel` alone.
+
+**The agent picks the tools unprompted.** Spot checks, not a benchmark: each
+prompt was a plain question that never named a tool, run through the same
+`omp -p --no-session --auto-approve … < /dev/null` as above.
+
+| Prompt | Tool chosen |
+| --- | --- |
+| Real-world public-repo examples of Go calling `errgroup.WithContext` | `ketch_code` (3 of 3 runs) |
+| Bun test-runner docs from `bun.sh/docs/cli/test` and its linked pages | `ketch_crawl` (2 of 2 runs) |
+| Latest stable PostgreSQL version | OMP's `web_search`, no ketch call |
+| Which file in this repo registers the tools | `glob` + `grep`, no ketch call |
+
+The last two matter as much as the first two: the descriptions do not pull
+routine web search or local-code questions away from OMP's native tools.
+
+**It is not cheaper than an agent that improvises.** Same code-search prompt,
+three runs per arm, in an empty directory so the disabled arm could not find
+this repo. Without the extension the agent fell back to `gh search code` and
+`gh api`; medians:
+
+| Arm | Tool calls | Tokens | Cost | Wall |
+| --- | --- | --- | --- | --- |
+| With `omp-ketch` | 7 | 236k | $0.34 | 77 s |
+| `--no-extensions` | 8 | 252k | $0.40 | 72 s |
+
+That is noise at this sample size, the crawl comparison went the other way
+(11 calls / $0.78 with the extension against 14 calls / $0.63 without), and
+`--no-extensions` disables every extension rather than this one, so the arms
+differ by more than the thing under test. Install it for the coverage —
+grep.app and Sourcegraph index code that `gh` cannot see, and neither needs
+GitHub auth — not for a token saving.
+
+A ketch backend failure propagates as a tool error carrying ketch's own
+message, never as an empty result, so the model can read it and retry
+elsewhere; one `grep.app search failed` in these runs was retried on
+Sourcegraph and succeeded.
 
 ## How the agent decides to call it
 
@@ -94,13 +160,14 @@ To force a specific tool, name it explicitly in your prompt.
 ## Configuration
 
 - `KETCH_BIN`: absolute path to the `ketch` binary if it is not on `PATH`.
-- Backends and API keys (Context7, Exa, Firecrawl, Brave, SearXNG, and others)
-  are configured in **ketch itself**, e.g. `ketch config set context7_api_key <key>`.
-  See the [ketch docs](https://github.com/1broseidon/ketch).
+- Backends and API keys are configured in **ketch itself**, e.g.
+  `ketch config set context7_api_key <key>`. `ketch doctor` lists every backend
+  with its state, which is the authoritative answer to what you can reach. See
+  the [ketch docs](https://github.com/1broseidon/ketch).
 
-The default code backend is grep.app (ketch's own default). To default to
-Sourcegraph instead, change `ketch_code` to send `-b sourcegraph` when no
-`backend` is supplied, or set the default in ketch.
+The code backend defaults to whatever ketch is configured to use, grep.app if
+unset. To default to Sourcegraph instead, set it in ketch, or change
+`ketch_code` to send `-b sourcegraph` when no `backend` is supplied.
 
 ## Uninstall
 

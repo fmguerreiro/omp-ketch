@@ -17,7 +17,7 @@ const CRAWL_OUTPUT_CHAR_CAP = 40000;
 const KETCH_BIN = process.env.KETCH_BIN?.trim() || "ketch";
 const KETCH_ENV = { ...process.env, NO_COLOR: "1", TERM: "dumb" };
 const MISSING_BINARY_MSG =
-	"ketch is not installed or not on PATH. Install it with `brew install 1broseidon/tap/ketch`, or set KETCH_BIN to its absolute path.";
+	"ketch is not installed or not on PATH. Install it with `brew install ketch`, or set KETCH_BIN to its absolute path.";
 
 const STATUS_BY_CODE: Record<number, KetchStatus> = { 0: "ok", 2: "validation", 3: "not_found", 4: "upstream", 5: "precondition", 6: "cancelled" };
 
@@ -216,6 +216,12 @@ function clampInt(value: number | undefined, min: number, max: number, dflt: num
 	return Math.min(max, Math.max(min, Math.trunc(value)));
 }
 
+// ketch takes --allow/--deny as cobra string slices, which CSV-split every value.
+function requireNoComma(value: string, flag: string): string {
+	if (value.includes(",")) throw new Error(`${flag} entries cannot contain a comma; ketch would split "${value}" into separate filters. Pass one entry per array element.`);
+	return value;
+}
+
 export default function ketchTools(pi: ExtensionAPI): void {
 	const z = pi.zod;
 
@@ -226,7 +232,7 @@ export default function ketchTools(pi: ExtensionAPI): void {
 			"Search PUBLIC open-source code across grep.app, Sourcegraph, or GitHub via the ketch CLI. For real-world usage examples in third-party repositories. Not for the local checkout (use grep/read for that).",
 		parameters: z.object({
 			query: z.string().describe("Literal or regex code query."),
-			backend: z.enum(["grepapp", "sourcegraph", "github"]).optional().describe("Code backend; default grepapp."),
+			backend: z.enum(["grepapp", "sourcegraph", "github"]).optional().describe("Code backend; omit to use ketch's configured backend, grepapp if unset."),
 			lang: z.string().optional().describe("Language filter, e.g. go, typescript, python."),
 			regex: z.boolean().optional().describe("Treat query as a regex (grepapp/sourcegraph only, not github)."),
 			limit: z.number().optional().describe("Max results, 1-20 (default 10)."),
@@ -261,7 +267,7 @@ export default function ketchTools(pi: ExtensionAPI): void {
 			const args: string[] = [];
 			if (params.resolve) args.push("--resolve");
 			if (params.library) args.push("--library", params.library);
-			args.push("--tokens", String(clampInt(params.tokens, 100, 12000, 4000)));
+			if (!params.resolve) args.push("--tokens", String(clampInt(params.tokens, 100, 12000, 4000)));
 			if (typeof params.limit === "number") args.push("-l", String(clampInt(params.limit, 1, 20, 10)));
 			return runSurface("docs", args, params.query, { cwd: ctx.cwd, signal, timeoutMs: 45000 });
 		},
@@ -275,9 +281,11 @@ export default function ketchTools(pi: ExtensionAPI): void {
 		parameters: z.object({
 			query: z.string().describe("Search query."),
 			backends: z
-				.array(z.enum(["brave", "ddg", "searxng", "exa", "firecrawl", "keenable"]))
+				.array(z.string())
 				.optional()
-				.describe("Explicit backend set to fuse; omit to fuse every usable backend."),
+				.describe(
+					"Omit this to fuse every backend your ketch install can reach, which is the reliable choice: naming one that has no key or URL fails the whole call, and only `ketch doctor` shows which are usable. Names come from `ketch search --help`; an unknown one is rejected with the current list.",
+				),
 			limit: z.number().optional().describe("Max fused results, 1-20 (default 10)."),
 		}),
 		approval: "exec",
@@ -299,8 +307,8 @@ export default function ketchTools(pi: ExtensionAPI): void {
 			maxPages: z.number().optional().describe("Stop after this many pages, 1-100 (default 20)."),
 			maxChars: z.number().optional().describe("Max markdown chars per page, 1-20000 (default 6000)."),
 			sitemap: z.boolean().optional().describe("Treat the seed URL as a sitemap."),
-			allow: z.array(z.string()).optional().describe("Path substrings; a URL must match at least one."),
-			deny: z.array(z.string()).optional().describe("Regex patterns for URLs to skip."),
+			allow: z.array(z.string()).optional().describe("Path substrings; a URL must match at least one. One substring per element, no commas."),
+			deny: z.array(z.string()).optional().describe("Regex patterns for URLs to skip. One pattern per element, no commas (so no {n,m} quantifiers)."),
 		}),
 		approval: "exec",
 		async execute(_id, params, signal, _onUpdate, ctx) {
@@ -316,8 +324,8 @@ export default function ketchTools(pi: ExtensionAPI): void {
 			const maxChars = clampInt(params.maxChars, 1, 20000, 6000);
 			const args = ["crawl", params.url, "--depth", String(clampInt(params.depth, 1, 5, 2)), "--json"];
 			if (params.sitemap) args.push("--sitemap");
-			for (const a of params.allow ?? []) args.push("--allow", a);
-			for (const d of params.deny ?? []) args.push("--deny", d);
+			for (const a of params.allow ?? []) args.push("--allow", requireNoComma(a, "allow"));
+			for (const d of params.deny ?? []) args.push("--deny", requireNoComma(d, "deny"));
 			const { pages, parseErrors, stderr, code, stopped } = await runKetchCrawl(args, { cwd: ctx.cwd, signal, timeoutMs: 180000, maxPages, maxChars });
 
 			if (pages.length === 0) {
