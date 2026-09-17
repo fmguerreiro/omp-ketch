@@ -275,9 +275,9 @@ export default function ketchTools(pi: ExtensionAPI): void {
 		parameters: z.object({
 			query: z.string().describe("Search query."),
 			backends: z
-				.array(z.enum(["brave", "ddg", "searxng", "exa", "firecrawl", "keenable"]))
+				.array(z.enum(["brave", "ddg", "searxng", "exa", "firecrawl", "keenable", "tavily", "parallel", "serpbase", "degoog"]))
 				.optional()
-				.describe("Explicit backend set to fuse; omit to fuse every usable backend."),
+				.describe("Explicit backend set to fuse; omit to fuse every usable backend. Naming a backend that lacks a key or URL fails the whole call."),
 			limit: z.number().optional().describe("Max fused results, 1-20 (default 10)."),
 		}),
 		approval: "exec",
