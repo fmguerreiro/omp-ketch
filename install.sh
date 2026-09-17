@@ -7,7 +7,7 @@ DEST="${DEST_DIR}/ketch-tools.ts"
 
 if ! command -v ketch >/dev/null 2>&1 && [ -z "${KETCH_BIN:-}" ]; then
 	echo "warning: the 'ketch' binary is not on PATH." >&2
-	echo "         Install it with: brew install 1broseidon/tap/ketch" >&2
+	echo "         Install it with: brew install ketch" >&2
 	echo "         (or set KETCH_BIN to its absolute path)." >&2
 fi
 
