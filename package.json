@@ -1,6 +1,6 @@
 {
   "name": "omp-ketch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Public code search, library docs, deep web search, and site crawling for OMP.",
   "license": "MIT",
   "type": "module",
