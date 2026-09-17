@@ -74,13 +74,74 @@ ketch code -b sourcegraph --lang go -l 2 -- "errgroup.WithContext"
 ```sh
 omp -p --no-session --mode json --auto-approve \
   'Call ketch_code with backend sourcegraph, lang go, limit 2, query "errgroup.WithContext". Return only the tool result.' \
+  < /dev/null \
   | jq -c 'select(.type=="tool_execution_end") | {toolName, isError, text: .result.content[0].text}'
 ```
+
+The `< /dev/null` is required. With any stdin still open — a pipe, a parent
+shell, another agent — `omp -p` blocks in its `readPipedInput` startup phase
+and never runs the prompt. Startup also takes ~90 s when nested, so allow for
+that before assuming it hung.
 
 OMP surfaces extension tools as `xd://<tool>` devices, so the event's
 `toolName` is `write` with `path: "xd://ketch_code"`. **Either** a
 ketch-formatted result **or** a propagated ketch backend error (e.g. grep.app
 returning a 504) proves the tool loaded and reached the binary.
+
+## Measured behaviour
+
+Run 2026-09-17 with ketch v0.16.1, OMP v18.2.2, model `claude-opus-5`.
+
+**Surfaces reached the backend** (`ketch` alone, no OMP, no model):
+
+| Command | Result |
+| --- | --- |
+| `ketch code -l 2 -- "errgroup.WithContext"` | 2 hits with `file:line` and URL, 1.5 s (grep.app) |
+| `ketch code -b sourcegraph --lang go -l 2 -- …` | 2 hits, 23.8 s |
+| `ketch crawl "https://bun.sh/docs/cli/test" --depth 1 --json` | seed page as markdown, 2168 words, 1.3 s |
+| `ketch search --multi=all -l 3 -- …` | 3 fused results from exa, keenable, parallel; ddg and searxng unreachable, 1.9 s |
+| `ketch docs -l 2 -- "tenacity retry"` | fails: `context7: API key not set` |
+
+`ketch_docs` therefore does nothing until a Context7 key is set, and
+`ketch_deep_search` only fuses the backends your ketch install can actually
+reach. Omitting `backends` is the safe call: naming an explicit set fails the
+whole search if any one of them is unconfigured — `--multi=parallel,tavily`
+returns `tavily: API key not set` and no results, rather than falling back to
+`parallel` alone.
+
+**The agent selects the tools unprompted.** Each prompt was a plain question
+that never named a tool, run through `omp -p --no-session --auto-approve`:
+
+| Prompt | Tool chosen |
+| --- | --- |
+| Real-world public-repo examples of Go calling `errgroup.WithContext` | `ketch_code` (3 of 3 runs) |
+| Bun test-runner docs from `bun.sh/docs/cli/test` and its linked pages | `ketch_crawl` (2 of 2 runs) |
+| Latest stable PostgreSQL version | OMP's `web_search`, no ketch call |
+| Which file in this repo registers the tools | `glob` + `grep`, no ketch call |
+
+The last two matter as much as the first two: the descriptions do not pull
+routine web search or local-code questions away from OMP's native tools.
+
+**It is not cheaper than an agent that improvises.** Same code-search prompt,
+three runs per arm, in an empty directory so the disabled arm could not find
+this repo. Without the extension the agent fell back to `gh search code` and
+`gh api`; medians:
+
+| Arm | Tool calls | Tokens | Cost | Wall |
+| --- | --- | --- | --- | --- |
+| With `omp-ketch` | 7 | 236k | $0.34 | 77 s |
+| `--no-extensions` | 8 | 252k | $0.40 | 72 s |
+
+That is noise at this sample size, and the single crawl comparison went the
+other way (11 calls / $0.78 with the extension against 14 calls / $0.63
+without). Every source link both arms cited resolved with HTTP 200. Install it
+for the coverage — grep.app and Sourcegraph index code that `gh` cannot see,
+and neither needs GitHub auth — not for a token saving.
+
+**Backends fail in the open.** One `ketch_code` call in these runs returned
+`code search failed: grep.app search failed` (exit 4); the agent read the error
+and retried on Sourcegraph, which succeeded. Expect transient backend errors to
+surface as tool errors rather than empty results.
 
 ## How the agent decides to call it
 
